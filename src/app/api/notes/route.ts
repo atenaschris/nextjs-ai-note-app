@@ -1,3 +1,4 @@
+
 import prisma from "@/lib/db/prisma";
 import {
   createNoteSchema,
@@ -5,6 +6,8 @@ import {
   updateNoteSchema,
 } from "@/lib/validation/note";
 import { auth } from "@clerk/nextjs";
+import { createNoteOperation, deleteNoteOperation, executeWithRetry, getEmbeddingForNote, updateNoteOperation } from "./helper";
+
 
 export async function POST(req: Request) {
   try {
@@ -25,13 +28,23 @@ export async function POST(req: Request) {
 
     const { title, content } = parseResult.data;
 
-    const note = await prisma.note.create({
-      data: {
+    const embedding = await getEmbeddingForNote(title,content)
+
+    const maxRetries = 3;
+    let currentRetry = 0;
+
+    const note = await executeWithRetry(
+      {
+        maxRetries,
+        currentRetry,
+        embedding,
         title,
         content,
         userId,
       },
-    });
+      ()=>createNoteOperation(title, userId,embedding,content),
+    );
+
     return Response.json({ note }, { status: 201 });
   } catch (error) {
     console.error(error);
@@ -66,13 +79,23 @@ export async function PUT(req: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const updatedNote = await prisma.note.update({
-      where: { id },
-      data: {
+    const embedding = await getEmbeddingForNote(title, content);
+
+    const maxRetries = 3;
+    let currentRetry = 0;
+
+    const updatedNote = await executeWithRetry(
+      {
+        maxRetries,
+        currentRetry,
+        embedding,
         title,
         content,
+        userId,
       },
-    });
+      ()=>updateNoteOperation({title, userId,embedding,content,id}),
+    );
+
     return Response.json({ updatedNote }, { status: 200 });
   } catch (error) {
     console.error(error);
@@ -107,12 +130,23 @@ export async function DELETE(req: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await prisma.note.delete({
-      where: { id },
-    });
-    return Response.json({ message: "Note deleted" }, { status: 200 });
+    const maxRetries = 3;
+    let currentRetry = 0;
+
+    const deletedNote = await executeWithRetry(
+      {
+        maxRetries,
+        currentRetry
+      },
+      ()=>deleteNoteOperation({id}),
+    );
+    return Response.json({ message: `Note deleted ${deletedNote.id}` }, { status: 200 });
   } catch (error) {
     console.error(error);
     return Response.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+
+
+
+

@@ -6,8 +6,10 @@ if(!apiKey){
     throw new Error("PINECONE_API_KEY is not set")
 }
 
+console.log('------> PINECONE_API_KEY' + apiKey)
+
 const pinecone = new Pinecone({
-    environment:"nextjs-chatbot-ai",
+    environment:"gcp-starter",
     apiKey
 })
 
